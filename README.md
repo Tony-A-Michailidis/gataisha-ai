@@ -21,6 +21,8 @@ This agent automates the continuous compliance monitoring and evidence collectio
 - **Executive Summaries** - Business-language reports for leadership
 - **Remediation Planning** - Phased implementation plans with effort estimates
 
+<img width="920" height="564" alt="image" src="https://github.com/user-attachments/assets/c021b54e-8fcb-4819-aeb5-6359300d4b50" />
+
 ### Supported Controls
 
 **Access Control (AC) Family:**
