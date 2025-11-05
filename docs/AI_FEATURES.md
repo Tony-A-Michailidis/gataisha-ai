@@ -1,4 +1,3 @@
-# TODO: Copy content from artifact "AI_FEATURES.md"
 AI Features Guide - Claude Integration
 Your Continuous ATO Agent is now enhanced with Claude AI to provide intelligent, context-aware compliance assessment capabilities.
 
