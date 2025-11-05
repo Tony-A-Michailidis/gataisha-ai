@@ -1,6 +1,6 @@
 # Continuous Authority to Operate (cATO) Agent for Azure AKS
 
-An AI-powered compliance monitoring agent that provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters, focused on NIST 800-53 Rev 5 Access Control (AC) and System and Communications Protection (SC) control families.
+An AI-powered compliance monitoring agent written with the help of Cladthat provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters, focused on NIST 800-53 Rev 5. Only for the just basic Access Control (AC) and System and Communications Protection (SC) control families. It can be expanded to add more families and security controls. More or less a prorotype I am working on.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
