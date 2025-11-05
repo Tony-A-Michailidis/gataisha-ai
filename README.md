@@ -21,7 +21,7 @@ This agent automates the continuous compliance monitoring and evidence collectio
 - **Executive Summaries** - Business-language reports for leadership
 - **Remediation Planning** - Phased implementation plans with effort estimates
 
-<img width="920" height="564" alt="image" src="https://github.com/user-attachments/assets/4c1ed188-eb36-4550-bdd2-376090521bb8" />
+<img width="920" height="564" alt="image" src="https://github.com/user-attachments/assets/c021b54e-8fcb-4819-aeb5-6359300d4b50" />
 
 ### Supported Controls
 
