@@ -391,7 +391,7 @@ def assess_ac_17(self, evidence_data: Dict) -> ControlAssessment:
 - [docs/AI_FEATURES.md](docs/AI_FEATURES.md) - Comprehensive AI capabilities guide
 - [docs/CLAUDE_PRO_ENHANCEMENTS.md](docs/CLAUDE_PRO_ENHANCEMENTS.md) - Enhancement details
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-- DeepWiki generated documentation - [ https://deepwiki.com/Tony-A-Michailidis/gataisha-ai](https://deepwiki.com/Tony-A-Michailidis/gataisha-ai)
+- [https://deepwiki.com/Tony-A-Michailidis/gataisha-ai](https://deepwiki.com/Tony-A-Michailidis/gataisha-ai) - DeepWiki generated documentation
 
 ## 🗺️ Roadmap
 
