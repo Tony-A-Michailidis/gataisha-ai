@@ -2,10 +2,6 @@
 
 An AI-powered compliance monitoring agent written with the help of Claude AI that provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters, focused on NIST 800-53 Rev 5 basic security controls of just two Access Control (AC) and System and Communications Protection (SC) control families. This is a prototype that will be expanded to cover more security control families. If you decide to attempt to run this please do not commit secrets and/or evidence to a public repo! 
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![AI Powered](https://img.shields.io/badge/AI-Claude%20Sonnet%204-purple.svg)](https://www.anthropic.com/claude)
-
 ## 🎯 Overview
 
 This agent automates the continuous compliance monitoring and evidence collection required to maintain an Authority to Operate (ATO) in regulated environments (FedRAMP, NIST, DoD, etc.).
