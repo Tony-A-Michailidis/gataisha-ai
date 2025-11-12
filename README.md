@@ -21,6 +21,8 @@ This agent automates the continuous compliance monitoring and evidence collectio
 
 ### Supported Controls
 
+(for now...)
+
 **Access Control (AC) Family:**
 - AC-2: Account Management
 - AC-3: Access Enforcement
@@ -411,6 +413,7 @@ def assess_ac_17(self, evidence_data: Dict) -> ControlAssessment:
 - [ ] Predictive compliance drift detection
 - [ ] Natural language query interface
 - [ ] Integration with security scanning tools (Trivy, Falco)
+- [ ] Add/Create Model Context Protocol (MCP) capabilities - very ambitious ! 
 
 ## 🤝 Contributing
 
@@ -441,6 +444,6 @@ This tool is provided as-is for compliance monitoring assistance. It does not gu
 
 ---
 
-**Made with ❤️ for the Azure DevOps and Security community**
+**Made with ❤️ with the help of Anthropic for the Azure AKS, DevSecOps and Cyber Security community**
 
 **Star ⭐ this repo if you find it useful!**
