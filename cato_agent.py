@@ -32,6 +32,10 @@ class ComplianceStatus(Enum):
 class ControlFamily(Enum):
     ACCESS_CONTROL = "AC"
     SYSTEM_COMMUNICATIONS_PROTECTION = "SC"
+    AUDIT_ACCOUNTABILITY = "AU"
+    CONFIGURATION_MANAGEMENT = "CM"
+    IDENTIFICATION_AUTHENTICATION = "IA"
+    SYSTEM_INFORMATION_INTEGRITY = "SI"
 
 
 @dataclass
@@ -150,7 +154,14 @@ class AzureDataCollector:
         try:
             aks_client = ContainerServiceClient(self.credential, self.subscription_id)
             cluster = aks_client.managed_clusters.get(self.resource_group, self.cluster_name)
-            
+
+            # Check for addon profiles
+            monitoring_enabled = False
+            azure_policy_enabled = False
+            if hasattr(cluster, 'addon_profiles') and cluster.addon_profiles:
+                monitoring_enabled = cluster.addon_profiles.get('omsagent', {}).enabled if cluster.addon_profiles.get('omsagent') else False
+                azure_policy_enabled = cluster.addon_profiles.get('azurepolicy', {}).enabled if cluster.addon_profiles.get('azurepolicy') else False
+
             return {
                 'source': 'AKS API',
                 'cluster_name': cluster.name,
@@ -160,7 +171,10 @@ class AzureDataCollector:
                 'network_policy': cluster.network_profile.network_policy if cluster.network_profile else None,
                 'private_cluster': cluster.api_server_access_profile.enable_private_cluster if cluster.api_server_access_profile else False,
                 'authorized_ip_ranges': cluster.api_server_access_profile.authorized_ip_ranges if cluster.api_server_access_profile else [],
-                'encryption_at_rest': cluster.disk_encryption_set_id is not None
+                'encryption_at_rest': cluster.disk_encryption_set_id is not None,
+                'monitoring_enabled': monitoring_enabled,
+                'azure_policy_enabled': azure_policy_enabled,
+                'auto_upgrade_enabled': cluster.auto_upgrade_profile is not None if hasattr(cluster, 'auto_upgrade_profile') else False
             }
         except Exception as e:
             logger.error(f"Error collecting AKS configuration: {e}")
@@ -262,6 +276,38 @@ class KubernetesDataCollector:
             logger.error(f"Error collecting pod security: {e}")
             return {'source': 'Pod Security', 'error': str(e)}
 
+    async def collect_container_images(self) -> Dict:
+        """Collect container image information"""
+        logger.info("Collecting container image information...")
+        try:
+            pods = self.v1.list_pod_for_all_namespaces()
+
+            images = set()
+            outdated_images = []
+
+            for pod in pods.items:
+                for container in pod.spec.containers:
+                    images.add(container.image)
+                    # Check for latest tag (not recommended)
+                    if ':latest' in container.image or ':' not in container.image:
+                        outdated_images.append({
+                            'pod': pod.metadata.name,
+                            'namespace': pod.metadata.namespace,
+                            'container': container.name,
+                            'image': container.image,
+                            'issue': 'Using latest tag or no tag specified'
+                        })
+
+            return {
+                'source': 'Container Images',
+                'total_unique_images': len(images),
+                'images_with_issues': len(outdated_images),
+                'issues': outdated_images[:20]
+            }
+        except Exception as e:
+            logger.error(f"Error collecting container images: {e}")
+            return {'source': 'Container Images', 'error': str(e)}
+
 
 class ControlAssessor:
     """Assesses NIST 800-53 controls based on collected evidence"""
@@ -326,6 +372,86 @@ class ControlAssessor:
                 'name': 'Protection of Information at Rest',
                 'family': 'SC',
                 'description': 'Protect the confidentiality and integrity of information at rest'
+            },
+            'AU-2': {
+                'name': 'Event Logging',
+                'family': 'AU',
+                'description': 'Identify the types of events that the system is capable of logging'
+            },
+            'AU-3': {
+                'name': 'Content of Audit Records',
+                'family': 'AU',
+                'description': 'Ensure audit records contain information to establish what, when, where, and who'
+            },
+            'AU-6': {
+                'name': 'Audit Record Review, Analysis, and Reporting',
+                'family': 'AU',
+                'description': 'Review and analyze system audit records for indications of inappropriate activity'
+            },
+            'AU-9': {
+                'name': 'Protection of Audit Information',
+                'family': 'AU',
+                'description': 'Protect audit information and audit logging tools from unauthorized access'
+            },
+            'AU-12': {
+                'name': 'Audit Record Generation',
+                'family': 'AU',
+                'description': 'Provide audit record generation capability for defined auditable events'
+            },
+            'CM-2': {
+                'name': 'Baseline Configuration',
+                'family': 'CM',
+                'description': 'Develop, document, and maintain baseline configurations'
+            },
+            'CM-3': {
+                'name': 'Configuration Change Control',
+                'family': 'CM',
+                'description': 'Determine and control changes to system configuration'
+            },
+            'CM-6': {
+                'name': 'Configuration Settings',
+                'family': 'CM',
+                'description': 'Establish and document configuration settings for system components'
+            },
+            'CM-7': {
+                'name': 'Least Functionality',
+                'family': 'CM',
+                'description': 'Configure the system to provide only essential capabilities'
+            },
+            'IA-2': {
+                'name': 'Identification and Authentication',
+                'family': 'IA',
+                'description': 'Uniquely identify and authenticate organizational users'
+            },
+            'IA-4': {
+                'name': 'Identifier Management',
+                'family': 'IA',
+                'description': 'Manage system identifiers for users and devices'
+            },
+            'IA-5': {
+                'name': 'Authenticator Management',
+                'family': 'IA',
+                'description': 'Manage system authenticators including passwords and tokens'
+            },
+            'SI-2': {
+                'name': 'Flaw Remediation',
+                'family': 'SI',
+                'description': 'Identify, report, and correct system flaws'
+            },
+            'SI-3': {
+                'name': 'Malicious Code Protection',
+                'family': 'SI',
+                'description': 'Implement malicious code protection mechanisms'
+            },
+            'SI-4': {
+                'name': 'System Monitoring',
+                'family': 'SI',
+                'description': 'Monitor the system to detect attacks and unauthorized activity'
+            },
+            'SI-5': {
+                'name': 'Security Alerts and Advisories',
+                'family': 'SI',
+                'description': 'Receive and respond to system security alerts and advisories'
             }
         }
     
@@ -616,6 +742,449 @@ class ControlAssessor:
             risk_score=min(risk_score, 100)
         )
 
+    # AU (Audit and Accountability) Controls
+
+    def assess_au_2(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess AU-2: Event Logging"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+
+        if not aks_config.get('monitoring_enabled'):
+            gaps.append("Azure Monitor for containers not enabled")
+            recommendations.append("Enable Azure Monitor for containers to collect audit logs")
+            risk_score += 50
+        else:
+            evidence_ids.append("azure_monitor_enabled")
+
+        if aks_config.get('monitoring_enabled'):
+            narrative = "AKS cluster has Azure Monitor for containers enabled, providing comprehensive logging " \
+                       "of cluster events, container logs, and performance metrics. " \
+                       "Control plane logs are available through Azure Monitor."
+        else:
+            narrative = "Event logging capabilities are limited. Azure Monitor for containers is not enabled, " \
+                       "reducing visibility into cluster activities and security events."
+
+        recommendations.append("Enable diagnostic settings to capture API server, audit, and authenticator logs")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='AU-2',
+            control_name=self.controls['AU-2']['name'],
+            family='AU',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    def assess_au_12(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess AU-12: Audit Record Generation"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+
+        if aks_config.get('monitoring_enabled'):
+            evidence_ids.append("monitoring_enabled")
+            narrative = "Audit record generation is implemented through Azure Monitor for containers, " \
+                       "which captures container logs, cluster metrics, and Kubernetes events. "
+            risk_score = 10
+        else:
+            gaps.append("Azure Monitor not enabled - limited audit record generation")
+            recommendations.append("Enable Azure Monitor to generate comprehensive audit records")
+            risk_score = 60
+            narrative = "Audit record generation is not fully implemented. Without Azure Monitor, " \
+                       "the cluster lacks comprehensive auditing capabilities."
+
+        recommendations.append("Configure diagnostic logs for kube-apiserver and kube-audit")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='AU-12',
+            control_name=self.controls['AU-12']['name'],
+            family='AU',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    # CM (Configuration Management) Controls
+
+    def assess_cm_2(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess CM-2: Baseline Configuration"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+        azure_policy = evidence_data.get('azure_policy', {})
+
+        if aks_config.get('azure_policy_enabled'):
+            evidence_ids.append("azure_policy_enabled")
+            narrative = "Baseline configuration management is implemented through Azure Policy for AKS. "
+            risk_score = 10
+        else:
+            gaps.append("Azure Policy for AKS not enabled")
+            recommendations.append("Enable Azure Policy add-on to enforce baseline configurations")
+            risk_score += 40
+            narrative = "Baseline configuration management is limited without Azure Policy. "
+
+        narrative += f"Cluster running Kubernetes version {aks_config.get('kubernetes_version', 'unknown')}. "
+
+        if not aks_config.get('auto_upgrade_enabled'):
+            gaps.append("Auto-upgrade not enabled for cluster")
+            recommendations.append("Enable auto-upgrade to maintain baseline configuration currency")
+            risk_score += 20
+
+        recommendations.append("Document and maintain Infrastructure as Code for cluster configuration")
+        recommendations.append("Implement GitOps practices for configuration management")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='CM-2',
+            control_name=self.controls['CM-2']['name'],
+            family='CM',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    def assess_cm_7(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess CM-7: Least Functionality"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+        pod_security = evidence_data.get('pod_security', {})
+
+        # Check if cluster is private
+        if aks_config.get('private_cluster'):
+            evidence_ids.append("private_cluster")
+            narrative = "Cluster implements least functionality through private cluster configuration, " \
+                       "limiting API server exposure. "
+        else:
+            gaps.append("Cluster API server is publicly accessible")
+            recommendations.append("Consider enabling private cluster to reduce attack surface")
+            risk_score += 30
+            narrative = "Cluster API server is publicly accessible. "
+
+        # Check for authorized IP ranges
+        auth_ranges = aks_config.get('authorized_ip_ranges', [])
+        if auth_ranges and not aks_config.get('private_cluster'):
+            evidence_ids.append("authorized_ip_ranges")
+            narrative += f"API access is restricted to {len(auth_ranges)} authorized IP ranges. "
+        elif not aks_config.get('private_cluster'):
+            gaps.append("No authorized IP ranges configured for public cluster")
+            recommendations.append("Configure authorized IP ranges to restrict API server access")
+            risk_score += 20
+
+        # Check pod security
+        security_issues = pod_security.get('security_issues', 0)
+        if security_issues > 0:
+            gaps.append(f"{security_issues} pods with unnecessary privileges detected")
+            recommendations.append("Review pod security contexts to enforce least privilege")
+            risk_score += min(security_issues * 2, 30)
+
+        recommendations.append("Disable unused Kubernetes features and APIs")
+        recommendations.append("Use Pod Security Standards to enforce least functionality")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='CM-7',
+            control_name=self.controls['CM-7']['name'],
+            family='CM',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    # IA (Identification and Authentication) Controls
+
+    def assess_ia_2(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess IA-2: Identification and Authentication"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+        rbac_config = evidence_data.get('rbac_configuration', {})
+
+        if aks_config.get('azure_ad_enabled'):
+            evidence_ids.append("azure_ad_enabled")
+            narrative = "Identification and authentication is implemented through Azure AD integration, " \
+                       "providing centralized identity management and multi-factor authentication capabilities. "
+            risk_score = 0
+        else:
+            gaps.append("Azure AD integration not enabled")
+            recommendations.append("Enable Azure AD integration for strong authentication")
+            risk_score += 50
+            narrative = "Azure AD integration is not enabled. Cluster relies on Kubernetes native authentication " \
+                       "which lacks enterprise identity management capabilities. "
+
+        if not aks_config.get('rbac_enabled'):
+            gaps.append("RBAC not enabled")
+            recommendations.append("Enable RBAC for proper authorization after authentication")
+            risk_score += 30
+
+        if rbac_config.get('cluster_role_bindings_count', 0) > 0:
+            evidence_ids.append("rbac_configured")
+            narrative += f"RBAC is configured with {rbac_config.get('cluster_role_bindings_count')} cluster role bindings."
+
+        recommendations.append("Implement service mesh with mutual TLS for service-to-service authentication")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='IA-2',
+            control_name=self.controls['IA-2']['name'],
+            family='IA',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    def assess_ia_5(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess IA-5: Authenticator Management"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 20  # Base risk for secret management
+
+        aks_config = evidence_data.get('aks_configuration', {})
+
+        narrative = "Authenticator management in AKS includes management of service account tokens, " \
+                   "Azure AD credentials, and Kubernetes secrets. "
+
+        if aks_config.get('azure_ad_enabled'):
+            evidence_ids.append("azure_ad_managed_auth")
+            narrative += "Azure AD manages user authentication credentials with enterprise-grade policies. "
+        else:
+            gaps.append("Azure AD not enabled - limited authenticator management")
+            risk_score += 30
+
+        recommendations.append("Implement Azure Key Vault for Kubernetes secrets management")
+        recommendations.append("Enable automatic service account token rotation")
+        recommendations.append("Use Azure Managed Identities for pod authentication to Azure services")
+        recommendations.append("Implement secret scanning in CI/CD pipelines")
+
+        gaps.append("Manual verification needed for secret rotation policies")
+        gaps.append("Verify Key Vault integration for secrets management")
+
+        status = ComplianceStatus.PARTIALLY_IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='IA-5',
+            control_name=self.controls['IA-5']['name'],
+            family='IA',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    # SI (System and Information Integrity) Controls
+
+    def assess_si_2(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess SI-2: Flaw Remediation"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+        defender_recs = evidence_data.get('defender_recommendations', {})
+        container_images = evidence_data.get('container_images', {})
+
+        # Check auto-upgrade
+        if aks_config.get('auto_upgrade_enabled'):
+            evidence_ids.append("auto_upgrade_enabled")
+            narrative = "Flaw remediation is partially automated through cluster auto-upgrade. "
+        else:
+            gaps.append("Auto-upgrade not enabled for AKS cluster")
+            recommendations.append("Enable auto-upgrade to automatically patch cluster components")
+            risk_score += 30
+            narrative = "Cluster does not have auto-upgrade enabled. "
+
+        narrative += f"Cluster running Kubernetes {aks_config.get('kubernetes_version', 'unknown')}. "
+
+        # Check Defender recommendations
+        unhealthy = defender_recs.get('unhealthy', 0)
+        if unhealthy > 0:
+            gaps.append(f"{unhealthy} unhealthy security recommendations from Defender")
+            recommendations.append("Address security recommendations from Microsoft Defender for Cloud")
+            risk_score += min(unhealthy * 5, 40)
+
+        # Check container images
+        images_with_issues = container_images.get('images_with_issues', 0)
+        if images_with_issues > 0:
+            gaps.append(f"{images_with_issues} containers using 'latest' or untagged images")
+            recommendations.append("Use specific image tags for better version control and flaw tracking")
+            risk_score += min(images_with_issues * 2, 20)
+
+        recommendations.append("Implement container image scanning in CI/CD pipeline")
+        recommendations.append("Establish patch management process for container images")
+        recommendations.append("Monitor CVE databases for vulnerabilities in deployed images")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='SI-2',
+            control_name=self.controls['SI-2']['name'],
+            family='SI',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    def assess_si_3(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess SI-3: Malicious Code Protection"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 30  # Base risk as this needs manual verification
+
+        defender_recs = evidence_data.get('defender_recommendations', {})
+
+        narrative = "Malicious code protection for AKS should be implemented through Microsoft Defender for Containers, " \
+                   "which provides runtime threat detection and image vulnerability scanning. "
+
+        total_recs = defender_recs.get('total_recommendations', 0)
+        if total_recs > 0:
+            evidence_ids.append("defender_enabled")
+            narrative += f"Microsoft Defender is active with {total_recs} security assessments. "
+            risk_score = 20
+        else:
+            gaps.append("Microsoft Defender for Containers assessments not detected")
+            recommendations.append("Enable and configure Microsoft Defender for Containers")
+            risk_score = 60
+
+        gaps.append("Manual verification needed for runtime threat detection configuration")
+        gaps.append("Verify admission controller policies block untrusted images")
+
+        recommendations.append("Implement image scanning before deployment")
+        recommendations.append("Use admission controllers to enforce image security policies")
+        recommendations.append("Enable runtime threat detection in Microsoft Defender")
+        recommendations.append("Implement network segmentation to limit malware spread")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='SI-3',
+            control_name=self.controls['SI-3']['name'],
+            family='SI',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
+    def assess_si_4(self, evidence_data: Dict) -> ControlAssessment:
+        """Assess SI-4: System Monitoring"""
+        gaps = []
+        recommendations = []
+        evidence_ids = []
+        risk_score = 0
+
+        aks_config = evidence_data.get('aks_configuration', {})
+        defender_recs = evidence_data.get('defender_recommendations', {})
+
+        if aks_config.get('monitoring_enabled'):
+            evidence_ids.append("azure_monitor_enabled")
+            narrative = "System monitoring is implemented through Azure Monitor for containers, " \
+                       "providing real-time monitoring of cluster health, resource utilization, and application performance. "
+            risk_score = 10
+        else:
+            gaps.append("Azure Monitor for containers not enabled")
+            recommendations.append("Enable Azure Monitor for comprehensive system monitoring")
+            risk_score += 50
+            narrative = "System monitoring capabilities are limited without Azure Monitor for containers. "
+
+        if defender_recs.get('total_recommendations', 0) > 0:
+            evidence_ids.append("defender_monitoring")
+            narrative += "Microsoft Defender provides security monitoring and threat detection. "
+        else:
+            gaps.append("Microsoft Defender security monitoring not detected")
+            recommendations.append("Enable Microsoft Defender for Containers for security monitoring")
+            risk_score += 20
+
+        recommendations.append("Configure alerts for security events and anomalies")
+        recommendations.append("Implement log aggregation and SIEM integration")
+        recommendations.append("Set up monitoring dashboards for security metrics")
+        recommendations.append("Enable Azure Sentinel for advanced threat detection")
+
+        status = ComplianceStatus.NOT_IMPLEMENTED if risk_score > 50 else \
+                 ComplianceStatus.PARTIALLY_IMPLEMENTED if risk_score > 0 else \
+                 ComplianceStatus.IMPLEMENTED
+
+        return ControlAssessment(
+            control_id='SI-4',
+            control_name=self.controls['SI-4']['name'],
+            family='SI',
+            status=status,
+            implementation_narrative=narrative,
+            evidence_ids=evidence_ids,
+            gaps=gaps,
+            recommendations=recommendations,
+            last_assessed=datetime.now(),
+            risk_score=min(risk_score, 100)
+        )
+
 
 class EvidenceRepository:
     """Stores and manages compliance evidence"""
@@ -677,18 +1246,19 @@ class ContinuousATOAgent:
     async def collect_all_evidence(self) -> Dict:
         """Collect evidence from all sources"""
         logger.info("Starting evidence collection...")
-        
+
         # Collect from all sources concurrently
-        azure_policy, defender_recs, aks_config, rbac_config, network_policies, pod_security = \
+        azure_policy, defender_recs, aks_config, rbac_config, network_policies, pod_security, container_images = \
             await asyncio.gather(
                 self.azure_collector.collect_policy_compliance(),
                 self.azure_collector.collect_defender_recommendations(),
                 self.azure_collector.collect_aks_configuration(),
                 self.k8s_collector.collect_rbac_configuration(),
                 self.k8s_collector.collect_network_policies(),
-                self.k8s_collector.collect_pod_security()
+                self.k8s_collector.collect_pod_security(),
+                self.k8s_collector.collect_container_images()
             )
-        
+
         evidence_data = {
             'azure_policy': azure_policy,
             'defender_recommendations': defender_recs,
@@ -696,6 +1266,7 @@ class ContinuousATOAgent:
             'rbac_configuration': rbac_config,
             'network_policies': network_policies,
             'pod_security': pod_security,
+            'container_images': container_images,
             'collection_timestamp': datetime.now()
         }
         
@@ -717,7 +1288,72 @@ class ContinuousATOAgent:
         logger.info("Starting control assessments...")
         
         assessments = [
+            # Access Control (AC)
             self.assessor.assess_ac_2(evidence_data),
             self.assessor.assess_ac_3(evidence_data),
             self.assessor.assess_ac_6(evidence_data),
-            self
+            # System and Communications Protection (SC)
+            self.assessor.assess_sc_7(evidence_data),
+            self.assessor.assess_sc_8(evidence_data),
+            self.assessor.assess_sc_28(evidence_data),
+            # Audit and Accountability (AU)
+            self.assessor.assess_au_2(evidence_data),
+            self.assessor.assess_au_12(evidence_data),
+            # Configuration Management (CM)
+            self.assessor.assess_cm_2(evidence_data),
+            self.assessor.assess_cm_7(evidence_data),
+            # Identification and Authentication (IA)
+            self.assessor.assess_ia_2(evidence_data),
+            self.assessor.assess_ia_5(evidence_data),
+            # System and Information Integrity (SI)
+            self.assessor.assess_si_2(evidence_data),
+            self.assessor.assess_si_3(evidence_data),
+            self.assessor.assess_si_4(evidence_data)
+        ]
+        
+        # Store all assessments
+        for assessment in assessments:
+            self.repository.store_assessment(assessment)
+        
+        return assessments
+    
+    async def run_assessment(self) -> Dict:
+        """Run complete compliance assessment"""
+        logger.info("=" * 60)
+        logger.info("CONTINUOUS ATO ASSESSMENT STARTING")
+        logger.info("=" * 60)
+        
+        # Collect evidence
+        evidence_data = await self.collect_all_evidence()
+        
+        # Assess controls
+        assessments = await self.assess_all_controls(evidence_data)
+        
+        # Generate summary
+        total = len(assessments)
+        implemented = len([a for a in assessments if a.status == ComplianceStatus.IMPLEMENTED])
+        partial = len([a for a in assessments if a.status == ComplianceStatus.PARTIALLY_IMPLEMENTED])
+        not_impl = len([a for a in assessments if a.status == ComplianceStatus.NOT_IMPLEMENTED])
+        
+        compliance_percentage = (implemented + (partial * 0.5)) / total * 100 if total > 0 else 0
+        avg_risk_score = sum(a.risk_score for a in assessments) / total if total > 0 else 0
+        
+        summary = {
+            'total_controls': total,
+            'implemented': implemented,
+            'partially_implemented': partial,
+            'not_implemented': not_impl,
+            'compliance_percentage': round(compliance_percentage, 2),
+            'average_risk_score': round(avg_risk_score, 2),
+            'assessment_date': datetime.now().isoformat()
+        }
+        
+        logger.info("=" * 60)
+        logger.info(f"ASSESSMENT COMPLETE - Compliance: {compliance_percentage:.1f}%")
+        logger.info("=" * 60)
+        
+        return {
+            'summary': summary,
+            'assessments': assessments,
+            'evidence_data': evidence_data
+        }
