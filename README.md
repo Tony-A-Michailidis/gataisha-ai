@@ -16,8 +16,8 @@ This agent automates the continuous compliance monitoring and evidence collectio
 - **Evidence Repository** - Organized storage of compliance evidence for audits
 - **Executive Summaries** - Business-language reports for leadership
 - **Remediation Planning** - Phased implementation plans with effort estimates
-
-<img width="920" height="564" alt="image" src="https://github.com/user-attachments/assets/c021b54e-8fcb-4819-aeb5-6359300d4b50" />
+  
+<img width="3252" height="1093" alt="image" src="https://github.com/user-attachments/assets/ecbc8765-4c59-4de5-92e6-3990f83d76af" />
 
 ### Supported Controls
 
