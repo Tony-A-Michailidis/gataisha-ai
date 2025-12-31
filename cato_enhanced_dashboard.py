@@ -6,6 +6,7 @@ Includes executive summaries, remediation plans, and trend analysis
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import asyncio
@@ -492,10 +493,10 @@ async def get_security_posture_insights():
     """Get AI-powered security posture insights"""
     if not ai_assessor or not ai_assessor.ai_enabled:
         raise HTTPException(status_code=503, detail="AI features not enabled")
-    
+
     if last_assessment_result is None:
         raise HTTPException(status_code=404, detail="No assessment results available")
-    
+
     # Use AI to analyze overall security posture
     assessments_summary = [
         {
@@ -506,7 +507,7 @@ async def get_security_posture_insights():
         }
         for a in last_assessment_result['assessments']
     ]
-    
+
     prompt = f"""You are a cloud security architect analyzing the overall security posture of an Azure AKS environment.
 
 Assessment Summary:
@@ -532,7 +533,7 @@ Provide insights as JSON:
                 "content": prompt
             }]
         )
-        
+
         response_text = message.content[0].text
         start = response_text.find('{')
         end = response_text.rfind('}') + 1
@@ -542,11 +543,106 @@ Provide insights as JSON:
             return insights
         else:
             raise HTTPException(status_code=500, detail="Failed to parse AI response")
-            
+
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Failed to parse AI insights")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+
+
+@app.get("/api/health")
+async def health_check():
+    """
+    Comprehensive health check endpoint for Kubernetes probes and monitoring.
+    Checks API health, AI features, agent configuration, and assessment status.
+    """
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "2.0.0",
+        "components": {}
+    }
+
+    # Check API basic health
+    health_status["components"]["api"] = {
+        "status": "healthy",
+        "message": "API is running"
+    }
+
+    # Check AI features
+    if ai_assessor and ai_assessor.ai_enabled:
+        health_status["components"]["ai_features"] = {
+            "status": "healthy",
+            "enabled": True,
+            "model": "claude-sonnet-4-20250514"
+        }
+    else:
+        health_status["components"]["ai_features"] = {
+            "status": "degraded",
+            "enabled": False,
+            "message": "AI features disabled - ANTHROPIC_API_KEY not set"
+        }
+
+    # Check agent configuration
+    if agent is not None:
+        health_status["components"]["agent"] = {
+            "status": "healthy",
+            "configured": True
+        }
+    else:
+        health_status["components"]["agent"] = {
+            "status": "degraded",
+            "configured": False,
+            "message": "Agent not configured - call /api/config first"
+        }
+
+    # Check assessment status
+    if last_assessment_result is not None:
+        if 'error' in last_assessment_result:
+            health_status["components"]["assessment"] = {
+                "status": "unhealthy",
+                "last_assessment": last_assessment_result.get('timestamp'),
+                "error": last_assessment_result['error']
+            }
+        else:
+            health_status["components"]["assessment"] = {
+                "status": "healthy",
+                "last_assessment": last_assessment_result.get('timestamp'),
+                "compliance_percentage": last_assessment_result.get('summary', {}).get('compliance_percentage')
+            }
+    else:
+        health_status["components"]["assessment"] = {
+            "status": "pending",
+            "message": "No assessment run yet"
+        }
+
+    # Check if assessment is currently running
+    health_status["components"]["assessment_running"] = {
+        "status": "info",
+        "running": assessment_running
+    }
+
+    # Determine overall health status
+    component_statuses = [comp.get("status") for comp in health_status["components"].values()]
+    if "unhealthy" in component_statuses:
+        health_status["status"] = "unhealthy"
+    elif "degraded" in component_statuses:
+        health_status["status"] = "degraded"
+    else:
+        health_status["status"] = "healthy"
+
+    return health_status
+
+
+@app.get("/")
+async def root():
+    """Serve frontend dashboard"""
+    return FileResponse("static/index.html")
+
+
+# Mount static files
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
