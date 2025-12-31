@@ -1,6 +1,6 @@
 # Continuous Authority to Operate (cATO) Agent for Azure AKS
 
-An AI-powered compliance monitoring agent written with the help of Claude AI that provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters. Built on NIST 800-53 Rev 5, it implements **15 security controls** across **6 control families** (AC, SC, AU, CM, IA, SI), providing comprehensive technical compliance monitoring for regulated environments. If you decide to attempt to run this please do not commit secrets and/or evidence to a public repo! 
+An AI-powered compliance monitoring agent written with the help of Claude AI that provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters. Built on NIST 800-53 Rev 5, it implements **22 security controls** across **6 control families** (AC, SC, AU, CM, IA, SI), providing comprehensive technical compliance monitoring for regulated environments. If you decide to attempt to run this please do not commit secrets and/or evidence to a public repo! 
 
 ## 🎯 Overview
 
@@ -33,20 +33,27 @@ This agent automates the continuous compliance monitoring and evidence collectio
 
 **Audit and Accountability (AU) Family:**
 - AU-2: Event Logging
+- AU-3: Content of Audit Records
+- AU-6: Audit Record Review, Analysis, and Reporting
+- AU-9: Protection of Audit Information
 - AU-12: Audit Record Generation
 
 **Configuration Management (CM) Family:**
 - CM-2: Baseline Configuration
+- CM-3: Configuration Change Control
+- CM-6: Configuration Settings
 - CM-7: Least Functionality
 
 **Identification and Authentication (IA) Family:**
 - IA-2: Identification and Authentication
+- IA-4: Identifier Management
 - IA-5: Authenticator Management
 
 **System and Information Integrity (SI) Family:**
 - SI-2: Flaw Remediation
 - SI-3: Malicious Code Protection
 - SI-4: System Monitoring
+- SI-5: Security Alerts and Advisories
 
 ## 🚀 Quick Start
 
@@ -408,23 +415,24 @@ def assess_ac_17(self, evidence_data: Dict) -> ControlAssessment:
 
 ## 🗺️ Roadmap
 
-### Current (v2.0)
-- ✅ AC, SC, AU, CM, IA, and SI control families (15 controls total)
+### Current (v2.1)
+- ✅ AC, SC, AU, CM, IA, and SI control families (22 controls total)
+- ✅ Comprehensive audit controls (AU-2, AU-3, AU-6, AU-9, AU-12)
+- ✅ Full configuration management (CM-2, CM-3, CM-6, CM-7)
+- ✅ Complete identity management (IA-2, IA-4, IA-5)
+- ✅ Comprehensive integrity controls (SI-2, SI-3, SI-4, SI-5)
 - ✅ Azure Policy, Defender for Cloud, AKS API integration
 - ✅ AI-powered analysis with Claude Sonnet 4
 - ✅ Interactive web dashboard
 - ✅ REST API
 - ✅ Comprehensive health monitoring endpoint
 
-### Planned (v2.1)
-- [ ] Additional AU controls (AU-3, AU-6, AU-9)
-- [ ] Additional CM controls (CM-3, CM-6)
-- [ ] Additional IA controls (IA-4)
-- [ ] Additional SI control (SI-5)
+### Planned (v2.2)
 - [ ] OSCAL format export
 - [ ] Multi-cluster support
 - [ ] Real-time alerting
 - [ ] Integration with Azure DevOps for POA&M tracking
+- [ ] Automated control evidence collection scheduling
 
 ### Future (v3.0)
 - [ ] Automated remediation execution
