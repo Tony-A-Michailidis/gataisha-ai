@@ -19,6 +19,10 @@ This agent automates the continuous compliance monitoring and evidence collectio
   
 <img width="3252" height="1093" alt="image" src="https://github.com/user-attachments/assets/ecbc8765-4c59-4de5-92e6-3990f83d76af" />
 
+<img width="2604" height="1428" alt="Untitled1" src="https://github.com/user-attachments/assets/25fa0aad-7dde-4532-942b-2e5722b3ddcc" />
+
+<img width="2604" height="1428" alt="Untitled2" src="https://github.com/user-attachments/assets/206822de-2a40-4de7-8993-be073df84b32" />
+
 ### Supported Controls
 
 **Access Control (AC) Family:**
