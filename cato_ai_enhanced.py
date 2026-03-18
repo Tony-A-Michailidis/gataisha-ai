@@ -7,7 +7,13 @@ import os
 import json
 from typing import Dict, List, Optional
 from datetime import datetime
-import anthropic
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    anthropic = None
+    ANTHROPIC_AVAILABLE = False
+
 from dataclasses import dataclass
 
 # Import base classes from cato_agent
@@ -30,12 +36,15 @@ class AIEnhancedControlAssessor:
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
-        if self.api_key:
+        if self.api_key and ANTHROPIC_AVAILABLE:
             self.client = anthropic.Anthropic(api_key=self.api_key)
             self.ai_enabled = True
         else:
             self.ai_enabled = False
-            print("Warning: ANTHROPIC_API_KEY not set. AI features disabled.")
+            if not ANTHROPIC_AVAILABLE:
+                print("Warning: 'anthropic' package not installed. AI features disabled.")
+            else:
+                print("Warning: ANTHROPIC_API_KEY not set. AI features disabled.")
         
         self.controls = self._initialize_controls()
     

@@ -18,6 +18,9 @@ pydantic==2.5.3
 python-dotenv==1.0.0
 aiofiles==23.2.1
 
+# AI features: Claude API for enhanced narratives, risk scoring, and summaries
+anthropic>=0.40.0
+
 # Optional: For enhanced LLM-based narratives
 # openai==1.10.0
 # langchain==0.1.0
