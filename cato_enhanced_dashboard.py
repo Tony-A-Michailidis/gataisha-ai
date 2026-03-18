@@ -26,6 +26,7 @@ from cato_ai_enhanced import (
     AIEnhancedControlAssessor,
     enhance_assessment_with_ai
 )
+from oscal_exporter import build_oscal_assessment_results
 
 app = FastAPI(
     title="Continuous ATO API - AI Enhanced",
@@ -436,6 +437,48 @@ async def export_ato_package():
         headers={
             "Content-Disposition": f"attachment; filename=ato_package_{datetime.now().strftime('%Y%m%d')}.json"
         }
+    )
+
+
+@app.get("/api/export/oscal")
+async def export_oscal():
+    """
+    Export assessment results as an OSCAL Assessment Results (AR) document.
+
+    Returns a standards-compliant OSCAL 1.1.2 JSON file containing all
+    control findings, observations, and risks from the latest assessment.
+    The format follows NIST OSCAL Assessment Results schema and can be
+    consumed by any OSCAL-compatible GRC or compliance tool.
+    """
+    if last_assessment_result is None:
+        raise HTTPException(status_code=404, detail="No assessment results available")
+
+    if "error" in last_assessment_result:
+        raise HTTPException(status_code=500, detail=last_assessment_result["error"])
+
+    assessments = last_assessment_result.get("assessments", [])
+    summary = last_assessment_result.get("summary", {})
+
+    metadata = {
+        "cluster_name": summary.get("cluster_name", "AKS Cluster"),
+        "framework": "NIST 800-53 Rev 5",
+        "assessment_type": "Continuous ATO",
+        "generated_date": last_assessment_result.get("timestamp", datetime.now().isoformat()),
+        "ai_enhanced": summary.get("ai_enhanced", False),
+    }
+
+    oscal_doc = build_oscal_assessment_results(
+        assessments=assessments,
+        metadata=metadata,
+        system_name=metadata["cluster_name"],
+    )
+
+    json_str = json.dumps(oscal_doc, indent=2)
+    filename = f"oscal_assessment_results_{datetime.now().strftime('%Y%m%d')}.json"
+    return StreamingResponse(
+        iter([json_str]),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
