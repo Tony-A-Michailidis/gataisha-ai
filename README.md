@@ -1,6 +1,6 @@
-# Continuous Authority to Operate (cATO) Agent for Azure AKS
+# Continuous Authority to Operate (cATO) Agent for Azure AKS — v2.2
 
-An AI-powered compliance monitoring agent written with the help of Claude AI that provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters. Built on NIST 800-53 Rev 5, it implements **22 security controls** across **6 control families** (AC, SC, AU, CM, IA, SI), providing comprehensive technical compliance monitoring for regulated environments. If you decide to attempt to run this please do not commit secrets and/or evidence to a public repo! 
+An AI-powered compliance monitoring agent written with the help of Claude AI that provides **Continuous Authority to Operate** for Azure Kubernetes Service (AKS) clusters. Built on NIST 800-53 Rev 5, it implements **22 security controls** across **6 control families** (AC, SC, AU, CM, IA, SI), providing comprehensive technical compliance monitoring for regulated environments. If you decide to attempt to run this please do not commit secrets and/or evidence to a public repo!
 
 ## 🎯 Overview
 
@@ -16,6 +16,7 @@ This agent automates the continuous compliance monitoring and evidence collectio
 - **Evidence Repository** - Organized storage of compliance evidence for audits
 - **Executive Summaries** - Business-language reports for leadership
 - **Remediation Planning** - Phased implementation plans with effort estimates
+- **OSCAL Export** - Standards-compliant OSCAL 1.1.2 Assessment Results (AR) export for GRC tool integration
   
 <img width="3252" height="1093" alt="image" src="https://github.com/user-attachments/assets/ecbc8765-4c59-4de5-92e6-3990f83d76af" />
 
@@ -159,6 +160,7 @@ cato-agent/
 ├── cato_agent.py                  # Main agent logic
 ├── cato_ai_enhanced.py            # AI enhancement module
 ├── cato_enhanced_dashboard.py     # FastAPI web application
+├── oscal_exporter.py              # OSCAL Assessment Results generator
 ├── requirements.txt               # Python dependencies
 ├── Dockerfile                     # Container image
 ├── .env.example                   # Configuration template
@@ -247,9 +249,10 @@ az aks get-credentials --resource-group <rg> --name <cluster>
 - `GET /api/trends` - Historical trends
 - `GET /api/compare` - Compare assessments
 
-**Evidence**
+**Evidence & Export**
 - `GET /api/evidence` - List evidence
-- `GET /api/export/ato-package` - Export ATO package
+- `GET /api/export/ato-package` - Export full ATO package as JSON
+- `GET /api/export/oscal` - Export OSCAL 1.1.2 Assessment Results (AR) document
 
 ### Example Usage
 
@@ -272,6 +275,49 @@ summary = requests.get("http://localhost:8000/api/executive-summary").json()
 print(f"Posture: {summary['overall_posture']}")
 print(f"Compliance: {summary['compliance_readiness']}")
 ```
+
+## 📄 OSCAL Export
+
+The `GET /api/export/oscal` endpoint produces a standards-compliant **OSCAL 1.1.2 Assessment Results (AR)** document in JSON format. OSCAL (Open Security Controls Assessment Language) is the NIST standard for machine-readable security documentation, supported by FedRAMP and most modern GRC platforms.
+
+### What the export contains
+
+| OSCAL element | Source data |
+|---|---|
+| `findings` | One finding per control with `satisfied` / `not-satisfied` state |
+| `observations` | Control narratives and evidence IDs |
+| `risks` | One risk per identified gap, with likelihood and impact facets |
+| `metadata` | Cluster name, framework, OSCAL version, generation timestamp |
+
+### Status mapping
+
+| cATO status | OSCAL state |
+|---|---|
+| Implemented | `satisfied` |
+| Partially Implemented | `not-satisfied` |
+| Not Implemented | `not-satisfied` |
+| Not Assessed | `not-satisfied` |
+
+### Risk score mapping
+
+| Risk score | Likelihood / Impact |
+|---|---|
+| 0 – 30 | `low` |
+| 31 – 60 | `moderate` |
+| 61 – 100 | `high` |
+
+### Example usage
+
+```python
+import requests
+
+# Download the OSCAL AR document after running an assessment
+response = requests.get("http://localhost:8000/api/export/oscal")
+with open("oscal_assessment_results.json", "wb") as f:
+    f.write(response.content)
+```
+
+The resulting file can be imported into any OSCAL-compatible tool (e.g., XSLT-based validators, FedRAMP automation tooling, or GRC platforms that support OSCAL 1.1.x).
 
 ## 🎨 Dashboard Features
 
@@ -419,7 +465,7 @@ def assess_ac_17(self, evidence_data: Dict) -> ControlAssessment:
 
 ## 🗺️ Roadmap
 
-### Current (v2.1)
+### Current (v2.2)
 - ✅ AC, SC, AU, CM, IA, and SI control families (22 controls total)
 - ✅ Comprehensive audit controls (AU-2, AU-3, AU-6, AU-9, AU-12)
 - ✅ Full configuration management (CM-2, CM-3, CM-6, CM-7)
@@ -430,9 +476,9 @@ def assess_ac_17(self, evidence_data: Dict) -> ControlAssessment:
 - ✅ Interactive web dashboard
 - ✅ REST API
 - ✅ Comprehensive health monitoring endpoint
+- ✅ OSCAL 1.1.2 Assessment Results (AR) export (`GET /api/export/oscal`)
 
-### Planned (v2.2)
-- [ ] OSCAL format export
+### Planned (v2.3)
 - [ ] Multi-cluster support
 - [ ] Real-time alerting
 - [ ] Integration with Azure DevOps for POA&M tracking
